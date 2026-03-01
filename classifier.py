@@ -179,7 +179,7 @@ except FileNotFoundError:
         print(confusion_matrix(y_test, predicted))
         return MNB_model
     print("For same threshold:")
-    print("Linear Regression:")
+    print("Logistic Regression:")
     LR_model = LR_model_generator(X_train, X_test, y_train, y_test, threshold=threshold)
     print("Random Forest:")
     RF_model = RF_model_generator(X_train, X_test, y_train, y_test, threshold=threshold)
@@ -187,7 +187,7 @@ except FileNotFoundError:
     MNB_model = MNB_model_generator(X_train, X_test, y_train, y_test, threshold=threshold)
 
     print("For local best threshold:")
-    print("Linear Regression:")
+    print("Logistic Regression:")
     LR_model = LR_model_generator(X_train, X_test, y_train, y_test, threshold=0.6)
     print("Random Forest:")
     RF_model = RF_model_generator(X_train, X_test, y_train, y_test, threshold=0.2)
