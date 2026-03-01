@@ -3,6 +3,8 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split as TTS
 from sklearn.linear_model import LogisticRegression as LR
+from sklearn.ensemble import RandomForestClassifier as RFC
+from sklearn.naive_bayes import MultinomialNB as MNB
 from sklearn.metrics import classification_report, confusion_matrix
 import re
 from scipy.sparse import hstack
@@ -34,7 +36,9 @@ def labelling(message):
 try:
     bundle = joblib.load("model_bundle.pkl")
 
-    model = bundle["model"]
+    LR_model = bundle["LR_model"]
+    RF_model = bundle["RF_model"]
+    MNB_model = bundle["MNB_model"]
     vectorizer = bundle["vectorizer"]
     risk_max = bundle["risk_max"]
     sender_map = bundle["sender_map"]
@@ -81,8 +85,8 @@ except FileNotFoundError:
     df['sender'] = df['sender'].str.upper().str.strip()
 
     sender_map = {
-        'GOV': -1,
-        'CONTACT': -0.5,
+        'GOV': 1,
+        'CONTACT': 0.5,
         'UNKNOWN': 0
     }
 
@@ -113,6 +117,7 @@ except FileNotFoundError:
         random_state=0,
         stratify=y
     )
+    print(df.head())
 
     X_train_text = vectorizer.fit_transform(X_train_text)
     X_test_text = vectorizer.transform(X_test_text)
@@ -131,25 +136,71 @@ except FileNotFoundError:
 
 
 
-    def model_generator(X_train, X_test, y_train, y_test, threshold):
+    def LR_model_generator(X_train, X_test, y_train, y_test, threshold):
 
-        model = LR(class_weight="balanced", C = 5, max_iter=1000)
-        model.fit(X_train, y_train)
+        LR_model = LR(class_weight="balanced", C = 5, max_iter=1000)
+        LR_model.fit(X_train, y_train)
 
-        spam_prob = model.predict_proba(X_test)[:, 1]
+        spam_prob = LR_model.predict_proba(X_test)[:, 1]
         predicted = np.where(spam_prob >= threshold, 'spam', 'ham')
 
-        print(f"Report for thereshold {threshold}:")
         print(classification_report(y_test, predicted))
 
         print(confusion_matrix(y_test, predicted))
-        return model
+        return LR_model
+    
+    def RF_model_generator(X_train, X_test, y_train, y_test, threshold):
 
-    model = model_generator(X_train, X_test, y_train, y_test, threshold=threshold)
+        RF_model = RFC(
+            class_weight="balanced",
+            random_state=0)
+        
+        RF_model.fit(X_train, y_train)
+
+        spam_prob = RF_model.predict_proba(X_test)[:, 1]
+        predicted = np.where(spam_prob >= threshold, 'spam', 'ham')
+
+        print(classification_report(y_test, predicted))
+
+        print(confusion_matrix(y_test, predicted))
+        return RF_model
+    
+    def MNB_model_generator(X_train, X_test, y_train, y_test, threshold):
+
+        MNB_model = MNB()
+        
+        MNB_model.fit(X_train, y_train)
+
+        spam_prob = MNB_model.predict_proba(X_test)[:, 1]
+        predicted = np.where(spam_prob >= threshold, 'spam', 'ham')
+
+        print(classification_report(y_test, predicted))
+
+        print(confusion_matrix(y_test, predicted))
+        return MNB_model
+    print("For same threshold:")
+    print("Linear Regression:")
+    LR_model = LR_model_generator(X_train, X_test, y_train, y_test, threshold=threshold)
+    print("Random Forest:")
+    RF_model = RF_model_generator(X_train, X_test, y_train, y_test, threshold=threshold)
+    print("MNB:")
+    MNB_model = MNB_model_generator(X_train, X_test, y_train, y_test, threshold=threshold)
+
+    print("For local best threshold:")
+    print("Linear Regression:")
+    LR_model = LR_model_generator(X_train, X_test, y_train, y_test, threshold=0.6)
+    print("Random Forest:")
+    RF_model = RF_model_generator(X_train, X_test, y_train, y_test, threshold=0.2)
+    print("MNB:")
+    MNB_model = MNB_model_generator(X_train, X_test, y_train, y_test, threshold=0.2)
+
+
     risk_max = X_train_risk.max()
 
     bundle = {
-        "model": model,
+        "LR_model": LR_model,
+        "RF_model": RF_model,
+        "MNB_model": MNB_model,
         "vectorizer": vectorizer,
         "risk_max": risk_max,
         "sender_map": sender_map,
@@ -158,7 +209,7 @@ except FileNotFoundError:
 
     joblib.dump(bundle, "model_bundle.pkl")
 
-def predict_message(message, model, vectorizer, risk_max, sender_map, sender='UNKNOWN'):
+def predict_message(message, LR_model, RF_model, MNB_model, vectorizer, risk_max, sender_map, sender='UNKNOWN'):
     message = message.lower()
 
     if sender.upper().strip() == "GOV":
@@ -180,11 +231,11 @@ def predict_message(message, model, vectorizer, risk_max, sender_map, sender='UN
     
     X = hstack([vec, risk, sender_score])
     
-    prob = model.predict_proba(X)[0][1]
+    prob = LR_model.predict_proba(X)[0][1]
+    prob2 = RF_model.predict_proba(X)[0][1]
     label = 'spam' if prob > threshold else 'ham'
     
     print(f"Prediction: {label}")
-    print(f"Confidence: {prob*100:.2f}%")
+    print(f"Confidence_LR: {prob*100:.2f}%")
+    print(f"Confidence_RF: {prob2*100:.2f}%")
     print(f"Flags: {flags if flags else 'None'}")
-
-predict_message('http://1234', model, vectorizer, risk_max, sender_map, sender='CONTACT')
